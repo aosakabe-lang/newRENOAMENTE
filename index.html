@@ -18,7 +18,37 @@
     .img-thumb { max-width: 100%; max-height: 120px; margin-top: 8px; border-radius: 4px; display: none; }
     .preview-paper { background: white; padding: 30px; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
     .preview-table th, .preview-table td { font-size: 0.85rem; padding: 6px; text-align: center; }
+    .preview-title { border-bottom: 2px solid #1a237e; padding-bottom: 14px; }
+    .preview-meta { display: flex; justify-content: space-between; gap: 12px; color: #555; font-size: 0.85rem; margin: 12px 0 20px; }
+    .preview-section-title { color: #1a237e; border-bottom: 1px solid #9fa8da; padding-bottom: 6px; margin: 24px 0 10px; font-weight: 700; }
+    .preview-photo-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .preview-photo-card { border: 1px solid #ddd; padding: 8px; break-inside: avoid; }
+    .preview-photo-card img { display: block; width: 100%; height: 190px; object-fit: contain; background: #f5f5f5; }
+    .preview-photo-card figcaption { font-size: 0.85rem; margin-top: 6px; }
+    .preview-photo-status { display: block; min-height: 1.3em; margin-top: 4px; font-size: 0.75rem; color: #697386; }
+    .preview-iv-card { border: 1px solid #d8dce8; border-left: 4px solid #1a237e; padding: 14px; margin-bottom: 14px; break-inside: avoid; }
+    .preview-iv-chart { display: block; width: 100%; height: auto; min-height: 190px; background: #fff; }
+    .preview-iv-comment { white-space: pre-wrap; }
+    .preview-mode .fixed-bottom { display: none !important; }
     .chart-container { position: relative; height: 220px; width: 100%; background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 10px; }
+    @media print {
+      @page { size: A4 landscape; margin: 10mm; }
+      body { background: #fff !important; padding: 0 !important; }
+      .header-nav, .fixed-bottom, .preview-actions { display: none !important; }
+      .container { width: 100% !important; max-width: none !important; padding: 0 !important; margin: 0 !important; }
+      #view-input, #view-history { display: none !important; }
+      #view-preview { display: block !important; }
+      .preview-paper { border: 0; border-radius: 0; box-shadow: none; padding: 0; }
+      .preview-table th, .preview-table td { font-size: 8pt; }
+      .preview-section-title { break-after: avoid; }
+      table, tr, figure { break-inside: avoid; }
+      .preview-photo-card img { height: 150px; }
+    }
+    @media (max-width: 767.98px) {
+      .preview-paper { padding: 16px; }
+      .preview-photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .preview-meta { flex-direction: column; gap: 2px; }
+    }
   </style>
 </head>
 <body>
@@ -28,7 +58,6 @@
     <div class="h5 mb-0 fw-bold">⚙️ リノアメンテナンスツール</div>
     <div class="btn-group">
       <button class="btn btn-outline-light btn-sm active" id="nav-input" onclick="switchView('input')">📝 点検データ入力</button>
-      <button class="btn btn-outline-light btn-sm" id="nav-preview" onclick="switchView('preview')">👁️ 報告書プレビュー</button>
       <button class="btn btn-outline-light btn-sm" id="nav-history" onclick="switchView('history')">📁 履歴・下書き一覧</button>
     </div>
   </div>
@@ -135,6 +164,12 @@
       <div class="card-custom">
         <div class="card-header-custom">📷 6. 現場点検写真アップロード</div>
         <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="fw-bold mb-0">パネル遠影</h6>
+            <button type="button" class="btn btn-success btn-sm" onclick="addPanelFarPhoto()">＋ 遠影追加</button>
+          </div>
+          <div class="row mb-3" id="panelFarContainer"></div>
+          <hr>
           <div class="row">
             <div class="col-md-4 mb-3">
               <div class="photo-box">
@@ -199,15 +234,22 @@
     <!-- 画面2: 報告書プレビュー画面               -->
     <!-- ========================================== -->
     <div id="view-preview" style="display:none;">
-      <div class="alert alert-info d-flex justify-content-between align-items-center">
-        <span>📄 **印刷・確定用 報告書プレビュー**</span>
-        <button class="btn btn-sm btn-outline-primary" onclick="generatePreview()">🔄 最新データに更新</button>
+      <div class="alert alert-info d-flex justify-content-between align-items-center preview-actions">
+        <strong>報告書プレビュー</strong>
+        <div class="btn-group">
+          <button class="btn btn-sm btn-outline-secondary" onclick="switchView('history')">← 履歴一覧へ</button>
+          <button class="btn btn-sm btn-primary" onclick="window.print()">🖨 印刷 / PDF</button>
+        </div>
       </div>
       
-      <div class="preview-paper">
-        <div class="text-center mb-4">
-          <h3 class="fw-bold">太陽光発電設備 年次点検報告書</h3>
-          <p class="text-muted small">株式会社ＪＩＭリノア 施工部システム保全課</p>
+      <div id="preview-loading" class="alert alert-secondary" style="display:none;"></div>
+      <div class="preview-paper" id="preview-paper">
+        <div class="preview-title d-flex justify-content-between align-items-end">
+          <div>
+            <h3 class="fw-bold mb-1">太陽光発電設備 年次点検報告書</h3>
+            <p class="text-muted small mb-0">株式会社ＪＩＭリノア 施工部システム保全課</p>
+          </div>
+          <div class="text-end small"><div>状態: <span id="prev-status"></span></div><div>報告ID: <span id="prev-reportId">未保存</span></div><div>出力日: <span id="prev-generatedAt"></span></div></div>
         </div>
 
         <table class="table table-bordered preview-table mb-4">
@@ -227,34 +269,61 @@
             <tr>
               <th class="bg-light">設置住所</th>
               <td id="prev-address"></td>
-              <th class="bg-light">気象条件</th>
+              <th class="bg-light">連絡先</th>
+              <td id="prev-email"></td>
+            </tr>
+            <tr>
+              <th class="bg-light">気象・外気温</th>
               <td id="prev-weather"></td>
+              <th class="bg-light">室温</th>
+              <td id="prev-roomTemp"></td>
+            </tr>
+            <tr id="prev-chiefEngRow">
+              <th class="bg-light">電気主任技術者</th>
+              <td colspan="3" id="prev-chiefEng"></td>
             </tr>
           </tbody>
         </table>
 
-        <h6 class="fw-bold text-navy border-bottom pb-1 mb-2">【PCS点検結果 一覧】</h6>
+        <h5 class="preview-section-title">1. 目視点検結果</h5>
+        <div class="table-responsive mb-4">
+          <table class="table table-bordered preview-table">
+            <thead class="bg-light"><tr><th>点検対象</th><th>判定</th><th>点検対象</th><th>判定</th></tr></thead>
+            <tbody id="prev-visualTableBody"></tbody>
+          </table>
+        </div>
+
+        <h5 class="preview-section-title">2. PCS点検・測定結果</h5>
         <div class="table-responsive mb-4">
           <table class="table table-bordered preview-table">
             <thead class="bg-light">
               <tr>
-                <th>PCS No</th>
+                <th>PCS</th>
                 <th>型式</th>
                 <th>製造番号</th>
                 <th>瞬間(kW)</th>
                 <th>積算(kWh)</th>
                 <th>抑制(分)</th>
+                <th>開放電圧(V)</th>
+                <th>動作電圧(V)</th>
+                <th>動作電流(A)</th>
+                <th>U-O間(V)</th>
                 <th>増し締め</th>
                 <th>絶縁抵抗</th>
-                <th>I-Vカーブ所見</th>
               </tr>
             </thead>
             <tbody id="prev-pcsTableBody"></tbody>
           </table>
         </div>
 
-        <h6 class="fw-bold text-navy border-bottom pb-1 mt-4 mb-2">【総合所見・特記事項】</h6>
-        <div class="p-3 bg-light border rounded text-dark small" id="prev-ivCurveMemo" style="min-height: 60px;"></div>
+        <h5 class="preview-section-title">3. PCS別 I-Vカーブ・測定所見</h5>
+        <div id="prev-ivCurves"></div>
+
+        <h5 class="preview-section-title">4. 総合所見・特記事項</h5>
+        <div class="p-3 bg-light border rounded text-dark" id="prev-ivCurveMemo" style="min-height: 60px; white-space: pre-wrap;"></div>
+
+        <h5 class="preview-section-title">5. 点検写真</h5>
+        <div id="prev-photoGallery" class="preview-photo-grid"></div>
       </div>
     </div>
 
@@ -278,10 +347,11 @@
                   <th>施主様名</th>
                   <th>区分</th>
                   <th class="text-center">操作</th>
+                  <th class="text-center">報告書</th>
                 </tr>
               </thead>
               <tbody id="historyTableBody">
-                <tr><td colspan="6" class="text-center text-muted">データを読み込み中...</td></tr>
+                <tr><td colspan="7" class="text-center text-muted">データを読み込み中...</td></tr>
               </tbody>
             </table>
           </div>
@@ -300,18 +370,20 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     let pcsCount = 0;
+    let panelFarCount = 0;
+    let activePhotoUploads = 0;
+    const failedPhotoUploads = new Set();
     const chartInstances = {}; // 各PCSのグラフオブジェクト管理用
 
     function switchView(viewName) {
       document.getElementById('view-input').style.display = viewName === 'input' ? 'block' : 'none';
       document.getElementById('view-preview').style.display = viewName === 'preview' ? 'block' : 'none';
       document.getElementById('view-history').style.display = viewName === 'history' ? 'block' : 'none';
+      document.body.classList.toggle('preview-mode', viewName === 'preview');
 
       document.getElementById('nav-input').classList.toggle('active', viewName === 'input');
-      document.getElementById('nav-preview').classList.toggle('active', viewName === 'preview');
-      document.getElementById('nav-history').classList.toggle('active', viewName === 'history');
+      document.getElementById('nav-history').classList.toggle('active', viewName === 'history' || viewName === 'preview');
 
-      if (viewName === 'preview') generatePreview();
       if (viewName === 'history') loadHistoryList();
     }
 
@@ -328,8 +400,38 @@
       const imgThumb = document.getElementById(key + '_img');
       const hiddenUrl = document.getElementById(key + '_url');
 
-      statusDiv.innerHTML = "⏳ アップロード中...";
-      statusDiv.className = "small mt-1 text-primary";
+      if (file.size > 10 * 1024 * 1024) {
+        if (!hiddenUrl.value) failedPhotoUploads.add(key);
+        statusDiv.textContent = '❌ 画像は10MB以下にしてください。';
+        statusDiv.className = 'small mt-1 text-danger';
+        input.value = '';
+        return;
+      }
+
+      statusDiv.textContent = '⏳ 画像をDriveへアップロード中...';
+      statusDiv.className = 'small mt-1 text-primary';
+      input.disabled = true;
+      activePhotoUploads++;
+      let completed = false;
+      let timeoutId;
+      const finishUpload = () => {
+        if (completed) return false;
+        completed = true;
+        clearTimeout(timeoutId);
+        input.disabled = false;
+        activePhotoUploads = Math.max(0, activePhotoUploads - 1);
+        return true;
+      };
+      const showUploadError = message => {
+        if (!finishUpload()) return;
+        if (!hiddenUrl.value) failedPhotoUploads.add(key);
+        statusDiv.textContent = '❌ ' + message;
+        statusDiv.className = 'small mt-1 text-danger';
+        if (imgThumb && hiddenUrl.value) imgThumb.src = hiddenUrl.value;
+      };
+      timeoutId = setTimeout(() => {
+        showUploadError('応答がありません。通信状態を確認して画像を選び直してください。');
+      }, 180000);
 
       const reader = new FileReader();
       reader.onload = function(e) {
@@ -338,29 +440,78 @@
           imgThumb.style.display = 'inline-block';
         }
         const base64Data = e.target.result.split(',')[1];
+        const extension = file.type === 'image/jpeg' ? 'jpg' : (file.type.split('/')[1] || 'img').replace('svg+xml', 'svg');
         const fileData = {
-          filename: key + "_" + new Date().getTime() + ".jpg",
+          filename: key + '_' + new Date().getTime() + '.' + extension,
           mimeType: file.type,
           bytes: base64Data
         };
 
-        google.script.run
-          .withSuccessHandler(function(res) {
-            if(res.success) {
-              statusDiv.innerHTML = "✅ 保存完了";
-              statusDiv.className = "small mt-1 text-success fw-bold";
-              if(hiddenUrl) hiddenUrl.value = res.fileUrl;
-            }
-          })
-          .withFailureHandler(function(err) {
-            statusDiv.innerHTML = "❌ エラー: " + err.message;
-            statusDiv.className = "small mt-1 text-danger";
-          })
-          .uploadImageToDrive(fileData);
+        try {
+          google.script.run
+            .withSuccessHandler(function(res) {
+              if (res && res.success && res.fileUrl) {
+                  if (!finishUpload()) return;
+                  failedPhotoUploads.delete(key);
+                statusDiv.textContent = '✅ Driveへ保存しました';
+                statusDiv.className = 'small mt-1 text-success fw-bold';
+                if (hiddenUrl) hiddenUrl.value = res.fileUrl;
+              } else {
+                  showUploadError((res && res.error) || 'Driveへの保存に失敗しました。もう一度お試しください。');
+              }
+            })
+            .withFailureHandler(function(err) {
+                showUploadError((err && err.message) || 'アップロード通信に失敗しました。');
+            })
+            .uploadImageToDrive(fileData);
+        } catch (error) {
+            showUploadError(error.message || 'アップロードを開始できませんでした。');
+        }
+      };
+      reader.onerror = function() {
+          showUploadError('画像を読み込めませんでした。別の画像を選択してください。');
       };
       reader.readAsDataURL(file);
     }
 
+    function restorePhoto(key, url) {
+      if (!url) return;
+      const hiddenUrl = document.getElementById(key + '_url');
+      const imgThumb = document.getElementById(key + '_img');
+      const statusDiv = document.getElementById(key + '_status');
+      if (!hiddenUrl) return;
+      hiddenUrl.value = url;
+      if (imgThumb) {
+        imgThumb.src = url;
+        imgThumb.style.display = 'inline-block';
+      }
+      if (statusDiv) {
+        statusDiv.textContent = '✅ 保存済み';
+        statusDiv.className = 'small mt-1 text-success fw-bold';
+      }
+    }
+
+    function addPanelFarPhoto(url = '') {
+      const container = document.getElementById('panelFarContainer');
+      if (!container) return;
+      const columnNumber = ++panelFarCount;
+      const photoKey = 'panel_far_' + columnNumber;
+      container.insertAdjacentHTML('beforeend', `
+        <div class="col-md-4 mb-3">
+          <div class="photo-box">
+            <h6>パネル遠影（北から${columnNumber}列目①）</h6>
+            <input type="file" accept="image/*" class="form-control form-control-sm" onchange="handlePhotoUpload(this, '${photoKey}')">
+            <input type="hidden" id="${photoKey}_url" class="panel-far-photo-url" value="">
+            <img id="${photoKey}_img" class="img-thumb">
+            <div id="${photoKey}_status" class="small mt-1 text-muted"></div>
+          </div>
+        </div>
+      `);
+      restorePhoto(photoKey, url);
+    }
+
+  </script>
+  <script>
     // ★ I-Vカーブグラフ自動描画ロジック ★
     function renderIvCurveChart(id) {
       const voc = parseFloat(document.getElementById(`sys1_openv_${id}`)?.value) || 330; // 開放電圧
@@ -437,10 +588,11 @@
 
       pcsCount++;
       const currentId = pcsCount;
+      const photoKey = 'pcs_photo_' + currentId;
       const pcsHtml = `
         <div class="pcs-block" id="pcsBlock_${currentId}" data-pcsid="${currentId}">
           <span class="remove-pcs-btn" onclick="removePcsBlock(${currentId})">✖ 削除</span>
-          <h6 class="fw-bold text-success mb-3">PCS Unit ${currentId}</h6>
+          <h6 class="fw-bold text-success mb-3">パワーコンディショナー №${currentId}</h6>
           
           <div class="row mb-2">
             <div class="col-md-3"><label class="small text-muted">型式</label><input type="text" class="form-control form-control-sm pcs-model" value="${data ? data.model || '' : ''}"></div>
@@ -458,6 +610,18 @@
             <div class="col-md-3">
               <label class="small text-muted">絶縁抵抗(MΩ)</label>
               <select class="form-select form-select-sm pcs-insulation"><option value="100" ${data && data.insulation === '100' ? 'selected' : ''}>100 (正常)</option><option value="0" ${data && data.insulation === '0' ? 'selected' : ''}>0 (不良)</option></select>
+            </div>
+          </div>
+
+          <div class="row mb-3">
+            <div class="col-md-4">
+              <div class="photo-box">
+                <h6>📷 パワーコンディショナー №${currentId}</h6>
+                <input type="file" accept="image/*" class="form-control form-control-sm" onchange="handlePhotoUpload(this, '${photoKey}')">
+                <input type="hidden" id="${photoKey}_url" class="pcs-photo-url" value="">
+                <img id="${photoKey}_img" class="img-thumb">
+                <div id="${photoKey}_status" class="small mt-1 text-muted"></div>
+              </div>
             </div>
           </div>
 
@@ -486,12 +650,15 @@
         </div>
       `;
       container.insertAdjacentHTML('beforeend', pcsHtml);
+      restorePhoto(photoKey, data && data.photo);
       toggleHighVoltageFields();
       
       // グラフ初期描画
       setTimeout(() => renderIvCurveChart(currentId), 200);
     }
 
+  </script>
+  <script>
     function removePcsBlock(id) {
       if(confirm('このPCSデータを削除しますか？')) {
         const target = document.getElementById('pcsBlock_' + id);
@@ -504,6 +671,14 @@
 
     // 保存処理
     function executeSave(statusStr) {
+      if (activePhotoUploads > 0) {
+        alert('写真のアップロードが完了してから保存してください。');
+        return;
+      }
+      if (failedPhotoUploads.size > 0) {
+        alert('アップロードに失敗した写真があります。該当欄から画像を選び直してください。');
+        return;
+      }
       const btn = event.target;
       const originalText = btn.innerText;
       btn.innerText = "⏳ 保存中...";
@@ -525,6 +700,7 @@
           tighten: block.querySelector('.pcs-tighten').value,
           insulation: block.querySelector('.pcs-insulation').value,
           ivComment: block.querySelector('.pcs-iv-comment').value,
+          photo: block.querySelector('.pcs-photo-url').value,
           sys1: {
             openv: block.querySelector('.sys1-openv').value,
             opv: block.querySelector('.sys1-opv')?.value || '',
@@ -542,6 +718,7 @@
         metal: document.getElementById('photo_metal_url').value,
         other: document.getElementById('photo_other_url').value
       };
+      const panelFarPhotos = Array.from(document.querySelectorAll('.panel-far-photo-url'), input => input.value);
 
       const formData = {
         reportId: document.getElementById('reportId').value,
@@ -558,8 +735,16 @@
         ivCurveMemo: document.getElementById('ivCurveMemo').value,
         staff: staffArr,
         staffOther: document.getElementById('staffOther').value,
+        visualChecks: {
+          panel: document.getElementById('chkPanel').checked,
+          mount: document.getElementById('chkMount').checked,
+          metal: document.getElementById('chkMetal').checked,
+          board: document.getElementById('chkBoard').checked,
+          environment: document.getElementById('chkEnv').checked
+        },
         pcsData: pcsDataArray,
-        photos: photosData
+        photos: photosData,
+        panelFarPhotos: panelFarPhotos
       };
 
       google.script.run
@@ -576,44 +761,383 @@
         .saveReportData(formData);
     }
 
-    // プレビュー生成
-    function generatePreview() {
-      document.getElementById('prev-clientName').innerText = document.getElementById('clientName').value || '-';
-      document.getElementById('prev-voltageType').innerText = document.getElementById('voltageType').value || '-';
-      document.getElementById('prev-plantName').innerText = document.getElementById('plantName').value || '-';
-      document.getElementById('prev-address').innerText = document.getElementById('address').value || '-';
-      document.getElementById('prev-weather').innerText = (document.getElementById('weather').value || '-') + " / " + (document.getElementById('outTemp').value || '-') + "℃";
-
-      const staffArr = [];
-      document.querySelectorAll('input[name="staff"]:checked').forEach(cb => staffArr.push(cb.value));
-      document.getElementById('prev-staff').innerText = staffArr.join(', ') || '-';
-
-      let pcsHtml = '';
-      document.querySelectorAll('.pcs-block').forEach((block, idx) => {
-        pcsHtml += `<tr>
-          <td>PCS ${idx + 1}</td>
-          <td>${block.querySelector('.pcs-model').value || '-'}</td>
-          <td>${block.querySelector('.pcs-serial').value || '-'}</td>
-          <td>${block.querySelector('.pcs-kw').value || '-'}</td>
-          <td>${block.querySelector('.pcs-kwh').value || '-'}</td>
-          <td>${block.querySelector('.pcs-limit').value || '-'}</td>
-          <td>${block.querySelector('.pcs-tighten').value}</td>
-          <td class="${block.querySelector('.pcs-insulation').value === '0' ? 'text-danger fw-bold' : ''}">${block.querySelector('.pcs-insulation').value} MΩ</td>
-          <td class="text-start">${block.querySelector('.pcs-iv-comment').value || '異常なし'}</td>
-        </tr>`;
-      });
-      document.getElementById('prev-pcsTableBody').innerHTML = pcsHtml || '<tr><td colspan="9">データがありません</td></tr>';
-      document.getElementById('prev-ivCurveMemo').innerText = document.getElementById('ivCurveMemo').value || '特記事項なし';
+  </script>
+  <script>
+    function setPreviewText(id, value, fallback = '未入力') {
+      const target = document.getElementById(id);
+      if (target) target.textContent = value || fallback;
     }
 
+    function renderPreviewPhotos(photoItems = null) {
+      const gallery = document.getElementById('prev-photoGallery');
+      gallery.replaceChildren();
+      const photos = photoItems || [
+        ['交流集電盤（全体）', document.getElementById('photo_board1_url').value],
+        ['交流集電盤（端子部）', document.getElementById('photo_board2_url').value],
+        ['アレイ脚部', document.getElementById('photo_leg_url').value],
+        ['パネル裏面', document.getElementById('photo_back_url').value],
+        ['パネル押さえ金具', document.getElementById('photo_metal_url').value],
+        ['異常箇所・その他', document.getElementById('photo_other_url').value],
+        ...Array.from(document.querySelectorAll('.pcs-block'), (block, index) => [`パワーコンディショナー №${index + 1}`, block.querySelector('.pcs-photo-url').value]),
+        ...Array.from(document.querySelectorAll('.panel-far-photo-url'), (input, index) => [`パネル遠影（北から${index + 1}列目①）`, input.value])
+      ];
+
+      let visibleCount = 0;
+      photos.forEach(([label, url]) => {
+        if (!url || !/^https?:\/\//i.test(url)) return;
+        const figure = document.createElement('figure');
+        figure.className = 'preview-photo-card m-0';
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        const image = document.createElement('img');
+        image.src = url;
+        image.alt = label;
+        image.loading = 'eager';
+        const caption = document.createElement('figcaption');
+        caption.textContent = label;
+        const status = document.createElement('span');
+        status.className = 'preview-photo-status';
+        status.textContent = '写真を読み込み中...';
+        link.appendChild(image);
+        figure.append(link, caption, status);
+        gallery.appendChild(figure);
+        visibleCount++;
+
+        const reportId = document.getElementById('prev-reportId').textContent;
+        if (!reportId || reportId === '未保存') {
+          status.textContent = '案件を保存すると写真を表示できます';
+          return;
+        }
+        google.script.run
+          .withSuccessHandler(function(result) {
+            if (result && result.success && result.base64) {
+              image.src = `data:${result.mimeType};base64,${result.base64}`;
+              status.textContent = '';
+            } else {
+              status.textContent = (result && result.error) || '写真を表示できません。クリックしてDriveで確認できます。';
+            }
+          })
+          .withFailureHandler(function() {
+            status.textContent = '写真を表示できません。クリックしてDriveで確認できます。';
+          })
+          .getReportPhotoPreview(reportId, url);
+      });
+      if (!visibleCount) {
+        const empty = document.createElement('p');
+        empty.className = 'text-muted mb-0';
+        empty.textContent = '登録された写真はありません';
+        gallery.appendChild(empty);
+      }
+    }
+
+  </script>
+  <script>
+    function generatePreview() {
+      setPreviewText('prev-reportId', document.getElementById('reportId').value, '未保存');
+      setPreviewText('prev-generatedAt', new Date().toLocaleDateString('ja-JP'));
+      setPreviewText('prev-clientName', document.getElementById('clientName').value);
+      setPreviewText('prev-voltageType', document.getElementById('voltageType').value);
+      setPreviewText('prev-plantName', document.getElementById('plantName').value);
+      setPreviewText('prev-address', document.getElementById('address').value);
+      setPreviewText('prev-email', document.getElementById('email').value);
+      setPreviewText('prev-weather', `${document.getElementById('weather').value || '未入力'} / ${document.getElementById('outTemp').value || '未入力'}℃`);
+      setPreviewText('prev-roomTemp', document.getElementById('voltageType').value === '高圧' ? `${document.getElementById('roomTemp').value || '未入力'}℃` : '対象外');
+      setPreviewText('prev-chiefEng', document.getElementById('chiefEng').value);
+      document.getElementById('prev-chiefEngRow').style.display = document.getElementById('voltageType').value === '高圧' ? '' : 'none';
+
+      const staff = Array.from(document.querySelectorAll('input[name="staff"]:checked'), checkbox => checkbox.value);
+      const otherStaff = document.getElementById('staffOther').value.trim();
+      if (otherStaff) staff.push(otherStaff);
+      setPreviewText('prev-staff', staff.join('、'));
+
+      const checks = [
+        ['太陽光パネル', 'chkPanel'], ['架台', 'chkMount'], ['金具類', 'chkMetal'],
+        ['交流集合盤', 'chkBoard'], ['周辺環境', 'chkEnv']
+      ];
+      const visualBody = document.getElementById('prev-visualTableBody');
+      visualBody.replaceChildren();
+      for (let index = 0; index < checks.length; index += 2) {
+        const row = document.createElement('tr');
+        checks.slice(index, index + 2).forEach(([label, id]) => {
+          const nameCell = document.createElement('th');
+          nameCell.className = 'bg-light';
+          nameCell.textContent = label;
+          const resultCell = document.createElement('td');
+          const passed = document.getElementById(id).checked;
+          resultCell.textContent = passed ? '異常なし' : '要確認';
+          if (!passed) resultCell.className = 'text-danger fw-bold';
+          row.append(nameCell, resultCell);
+        });
+        if (checks.length - index === 1) row.append(document.createElement('td'), document.createElement('td'));
+        visualBody.appendChild(row);
+      }
+
+      const pcsBody = document.getElementById('prev-pcsTableBody');
+      pcsBody.replaceChildren();
+      document.querySelectorAll('.pcs-block').forEach((block, index) => {
+        const cells = [
+          `№${index + 1}`, block.querySelector('.pcs-model').value, block.querySelector('.pcs-serial').value,
+          block.querySelector('.pcs-kw').value, block.querySelector('.pcs-kwh').value, block.querySelector('.pcs-limit').value,
+          block.querySelector('.sys1-openv').value, block.querySelector('.sys1-opv')?.value, block.querySelector('.sys1-opa')?.value,
+          block.querySelector('.sys1-uov').value, block.querySelector('.pcs-tighten').value,
+          `${block.querySelector('.pcs-insulation').value} MΩ`
+        ];
+        const row = document.createElement('tr');
+        cells.forEach((value, cellIndex) => {
+          const cell = document.createElement('td');
+          cell.textContent = value || (cellIndex === 0 ? '' : '未入力');
+          if (cellIndex === 11 && block.querySelector('.pcs-insulation').value === '0') cell.className = 'text-danger fw-bold';
+          row.appendChild(cell);
+        });
+        pcsBody.appendChild(row);
+      });
+      if (!pcsBody.children.length) {
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = 12;
+        cell.textContent = 'PCSデータはありません';
+        row.appendChild(cell);
+        pcsBody.appendChild(row);
+      }
+
+      setPreviewText('prev-ivCurveMemo', document.getElementById('ivCurveMemo').value, '特記事項なし');
+      renderPreviewPhotos();
+    }
+
+  </script>
+  <script>
+    function previewSvgElement(name, attributes = {}) {
+      const element = document.createElementNS('http://www.w3.org/2000/svg', name);
+      Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, value));
+      return element;
+    }
+
+    function createPreviewIvChart(pcs) {
+      const width = 720;
+      const height = 300;
+      const left = 58;
+      const top = 18;
+      const plotWidth = 628;
+      const plotHeight = 224;
+      const vocValue = Number.parseFloat(pcs.sys1 && pcs.sys1.openv);
+      const vmpValue = Number.parseFloat(pcs.sys1 && pcs.sys1.opv);
+      const impValue = Number.parseFloat(pcs.sys1 && pcs.sys1.opa);
+      const voc = Number.isFinite(vocValue) && vocValue > 0 ? vocValue : 330;
+      const vmp = Number.isFinite(vmpValue) && vmpValue > 0 ? vmpValue : 265;
+      const imp = Number.isFinite(impValue) && impValue > 0 ? impValue : 7.5;
+      const maxVoltage = voc + 10;
+      const maxCurrent = imp * 1.15;
+      const x = voltage => left + (voltage / maxVoltage) * plotWidth;
+      const y = current => top + plotHeight - (current / maxCurrent) * plotHeight;
+      const svg = previewSvgElement('svg', {
+        viewBox: `0 0 ${width} ${height}`,
+        role: 'img',
+        'aria-label': `PCS I-Vカーブ参考図 開放電圧${voc}V 動作電圧${vmp}V 動作電流${imp}A`,
+        class: 'preview-iv-chart'
+      });
+
+      for (let tick = 0; tick <= 4; tick++) {
+        const voltage = maxVoltage * tick / 4;
+        const current = maxCurrent * tick / 4;
+        const gridX = x(voltage);
+        const gridY = y(current);
+        svg.appendChild(previewSvgElement('line', { x1: gridX, y1: top, x2: gridX, y2: top + plotHeight, stroke: '#e3e6ed' }));
+        svg.appendChild(previewSvgElement('line', { x1: left, y1: gridY, x2: left + plotWidth, y2: gridY, stroke: '#e3e6ed' }));
+        const xLabel = previewSvgElement('text', { x: gridX, y: top + plotHeight + 20, 'text-anchor': 'middle', fill: '#555', 'font-size': 12 });
+        xLabel.textContent = `${Math.round(voltage)}V`;
+        svg.appendChild(xLabel);
+        const yLabel = previewSvgElement('text', { x: left - 10, y: gridY + 4, 'text-anchor': 'end', fill: '#555', 'font-size': 12 });
+        yLabel.textContent = `${current.toFixed(1)}A`;
+        svg.appendChild(yLabel);
+      }
+
+      const idealPoints = [];
+      const referencePoints = [];
+      for (let voltage = 0; voltage <= maxVoltage; voltage += Math.max(maxVoltage / 70, 1)) {
+        const idealCurrent = Math.max(0, imp * (1 - Math.pow(voltage / voc, 6)));
+        const referenceCurrent = voltage > vmp && voltage < voc ? idealCurrent * 0.95 : idealCurrent;
+        idealPoints.push(`${x(voltage)},${y(idealCurrent)}`);
+        referencePoints.push(`${x(voltage)},${y(referenceCurrent)}`);
+      }
+      const curves = [
+        { points: idealPoints, color: '#7c8798', dash: '7 5' },
+        { points: referencePoints, color: '#1a237e', dash: '' }
+      ];
+      curves.forEach(curve => svg.appendChild(previewSvgElement('polyline', {
+        points: curve.points.join(' '),
+        fill: 'none',
+        stroke: curve.color,
+        'stroke-width': 3,
+        'stroke-dasharray': curve.dash,
+        'stroke-linejoin': 'round'
+      })));
+
+      const xTitle = previewSvgElement('text', { x: left + plotWidth / 2, y: height - 8, 'text-anchor': 'middle', fill: '#333', 'font-size': 13 });
+      xTitle.textContent = '電圧 (V)';
+      svg.appendChild(xTitle);
+      const legend = [
+        { x: left + 12, color: '#1a237e', text: '入力値から生成した参考曲線' },
+        { x: left + 260, color: '#7c8798', text: '基準曲線' }
+      ];
+      legend.forEach(item => {
+        svg.appendChild(previewSvgElement('line', { x1: item.x, y1: height - 28, x2: item.x + 26, y2: height - 28, stroke: item.color, 'stroke-width': 3 }));
+        const label = previewSvgElement('text', { x: item.x + 33, y: height - 24, fill: '#444', 'font-size': 12 });
+        label.textContent = item.text;
+        svg.appendChild(label);
+      });
+      return { svg, values: { voc, vmp, imp }, hasMeasuredInputs: Number.isFinite(vocValue) && Number.isFinite(impValue) };
+    }
+
+  </script>
+  <script>
+    function renderSavedReportPreview(data) {
+      setPreviewText('prev-status', data.status);
+      setPreviewText('prev-reportId', data.reportId);
+      setPreviewText('prev-generatedAt', new Date().toLocaleDateString('ja-JP'));
+      setPreviewText('prev-clientName', data.clientName);
+      setPreviewText('prev-voltageType', data.voltageType);
+      setPreviewText('prev-plantName', data.plantName);
+      setPreviewText('prev-address', data.address);
+      setPreviewText('prev-email', data.email);
+      setPreviewText('prev-weather', `${data.weather || '未入力'} / ${data.outTemp || '未入力'}℃`);
+      setPreviewText('prev-roomTemp', data.voltageType === '高圧' ? `${data.roomTemp || '未入力'}℃` : '対象外');
+      setPreviewText('prev-chiefEng', data.chiefEng);
+      document.getElementById('prev-chiefEngRow').style.display = data.voltageType === '高圧' ? '' : 'none';
+      const staff = [...(Array.isArray(data.staff) ? data.staff : [])];
+      if (data.staffOther) staff.push(data.staffOther);
+      setPreviewText('prev-staff', staff.join('、'));
+
+      const visualBody = document.getElementById('prev-visualTableBody');
+      visualBody.replaceChildren();
+      const visualItems = [
+        ['太陽光パネル', 'panel'], ['架台', 'mount'], ['金具類', 'metal'],
+        ['交流集合盤', 'board'], ['周辺環境', 'environment']
+      ];
+      visualItems.forEach((item, index) => {
+        if (index % 2 === 0) visualBody.appendChild(document.createElement('tr'));
+        const row = visualBody.lastElementChild;
+        const [label, key] = item;
+        const name = document.createElement('th');
+        name.className = 'bg-light';
+        name.textContent = label;
+        const result = document.createElement('td');
+        if (data.visualChecks && typeof data.visualChecks[key] === 'boolean') {
+          result.textContent = data.visualChecks[key] ? '異常なし' : '要確認';
+          if (!data.visualChecks[key]) result.className = 'text-danger fw-bold';
+        } else {
+          result.textContent = '記録なし';
+          result.className = 'text-muted';
+        }
+        row.append(name, result);
+      });
+      if (visualItems.length % 2) {
+        visualBody.lastElementChild.append(document.createElement('td'), document.createElement('td'));
+      }
+
+      const pcsBody = document.getElementById('prev-pcsTableBody');
+      const curves = document.getElementById('prev-ivCurves');
+      pcsBody.replaceChildren();
+      curves.replaceChildren();
+      const pcsItems = Array.isArray(data.pcsData) ? data.pcsData : [];
+      pcsItems.forEach((pcs, index) => {
+        const sys1 = pcs.sys1 || {};
+        const values = [
+          `№${index + 1}`, pcs.model, pcs.serial, pcs.kw, pcs.kwh, pcs.limit,
+          sys1.openv, sys1.opv, sys1.opa, sys1.uov, pcs.tighten, `${pcs.insulation || '未入力'} MΩ`
+        ];
+        const row = document.createElement('tr');
+        values.forEach((value, cellIndex) => {
+          const cell = document.createElement('td');
+          cell.textContent = value || '未入力';
+          if (cellIndex === 11 && String(pcs.insulation) === '0') cell.className = 'text-danger fw-bold';
+          row.appendChild(cell);
+        });
+        pcsBody.appendChild(row);
+
+        const card = document.createElement('section');
+        card.className = 'preview-iv-card';
+        const heading = document.createElement('h6');
+        heading.className = 'fw-bold mb-2';
+        heading.textContent = `パワーコンディショナー №${index + 1}　${pcs.model || ''} ${pcs.serial || ''}`.trim();
+        card.appendChild(heading);
+        const chart = createPreviewIvChart(pcs);
+        card.appendChild(chart.svg);
+        const note = document.createElement('p');
+        note.className = 'small text-muted mb-2';
+        note.textContent = chart.hasMeasuredInputs
+          ? `開放電圧 ${chart.values.voc} V / 動作電圧 ${chart.values.vmp} V / 動作電流 ${chart.values.imp} A。入力値から生成した参考曲線で、測定器の実測プロットではありません。`
+          : '一部測定値が未入力のため、未入力項目には既定値を使用しています。入力値から生成した参考曲線で、実測プロットではありません。';
+        card.appendChild(note);
+        const commentTitle = document.createElement('strong');
+        commentTitle.textContent = 'I-Vカーブ所見・コメント';
+        const comment = document.createElement('p');
+        comment.className = 'preview-iv-comment mb-0';
+        comment.textContent = pcs.ivComment || '所見未入力';
+        card.append(commentTitle, comment);
+        curves.appendChild(card);
+      });
+      if (!pcsItems.length) {
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = 12;
+        cell.textContent = 'PCSデータはありません';
+        row.appendChild(cell);
+        pcsBody.appendChild(row);
+        curves.textContent = 'PCSデータはありません';
+      }
+
+      setPreviewText('prev-ivCurveMemo', data.ivCurveMemo, '特記事項なし');
+      const photos = [];
+      const fixedPhotoLabels = [
+        ['board1', '交流集電盤（全体）'], ['board2', '交流集電盤（端子部）'], ['leg', 'アレイ脚部'],
+        ['back', 'パネル裏面'], ['metal', 'パネル押さえ金具'], ['other', '異常箇所・その他']
+      ];
+      fixedPhotoLabels.forEach(([key, label]) => photos.push([label, data.photos && data.photos[key] || '']));
+      pcsItems.forEach((pcs, index) => photos.push([`パワーコンディショナー №${index + 1}`, pcs.photo || '']));
+      (Array.isArray(data.panelFarPhotos) ? data.panelFarPhotos : []).forEach((url, index) => {
+        photos.push([`パネル遠影（北から${index + 1}列目①）`, url]);
+      });
+      renderPreviewPhotos(photos);
+    }
+
+    function loadReportPreview(reportId) {
+      const loading = document.getElementById('preview-loading');
+      const paper = document.getElementById('preview-paper');
+      loading.textContent = '報告書データを読み込み中...';
+      loading.className = 'alert alert-secondary';
+      loading.style.display = 'block';
+      paper.style.display = 'none';
+      switchView('preview');
+      google.script.run
+        .withSuccessHandler(function(data) {
+          if (!data) {
+            loading.textContent = 'この案件の報告書データが見つかりません。';
+            loading.className = 'alert alert-warning';
+            return;
+          }
+          renderSavedReportPreview(data);
+          loading.style.display = 'none';
+          paper.style.display = 'block';
+        })
+        .withFailureHandler(function(error) {
+          loading.textContent = '報告書を読み込めませんでした: ' + ((error && error.message) || '通信エラー');
+          loading.className = 'alert alert-danger';
+        })
+        .getReportDetail(reportId);
+    }
+
+  </script>
+  <script>
     function loadHistoryList() {
       const tbody = document.getElementById('historyTableBody');
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">データを読み込み中...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">データを読み込み中...</td></tr>';
 
       google.script.run
         .withSuccessHandler(function(list) {
           if (!list || list.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">保存されたデータはありません</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">保存されたデータはありません</td></tr>';
             return;
           }
           let html = '';
@@ -627,6 +1151,9 @@
               <td>${item.voltageType}</td>
               <td class="text-center">
                 <button class="btn btn-sm btn-outline-primary" onclick="loadReportDetail('${item.reportId}')">✏️ 開いて再編集</button>
+              </td>
+              <td class="text-center">
+                <button class="btn btn-sm btn-primary" onclick="loadReportPreview('${item.reportId}')">📄 報告書を見る</button>
               </td>
             </tr>`;
           });
@@ -653,6 +1180,13 @@
           document.getElementById('chiefEng').value = data.chiefEng || '';
           document.getElementById('ivCurveMemo').value = data.ivCurveMemo || '';
 
+            if (data.visualChecks) {
+              const visualCheckIds = { panel: 'chkPanel', mount: 'chkMount', metal: 'chkMetal', board: 'chkBoard', environment: 'chkEnv' };
+              Object.entries(visualCheckIds).forEach(([key, id]) => {
+                if (typeof data.visualChecks[key] === 'boolean') document.getElementById(id).checked = data.visualChecks[key];
+              });
+            }
+
           if(data.photos) {
             ['board1', 'board2', 'leg', 'back', 'metal', 'other'].forEach(key => {
               const url = data.photos[key];
@@ -664,6 +1198,15 @@
                 document.getElementById('photo_' + key + '_status').innerHTML = "✅ 保存済み";
               }
             });
+          }
+
+          const panelFarContainer = document.getElementById('panelFarContainer');
+          panelFarContainer.innerHTML = '';
+          panelFarCount = 0;
+          if (data.panelFarPhotos && data.panelFarPhotos.length > 0) {
+            data.panelFarPhotos.forEach(url => addPanelFarPhoto(url));
+          } else {
+            addPanelFarPhoto();
           }
 
           document.querySelectorAll('input[name="staff"]').forEach(cb => {
@@ -687,6 +1230,7 @@
 
     window.onload = function() {
       addPcsBlock();
+      addPanelFarPhoto();
     };
   </script>
 </body>

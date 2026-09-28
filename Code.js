@@ -12,6 +12,71 @@ function doGet() {
   return html;
 }
 
+// 点検写真をGoogle Driveへ保存し、プレビュー用URLを返す
+function uploadImageToDrive(fileData) {
+  try {
+    if (!fileData || typeof fileData.bytes !== 'string' || !fileData.bytes) {
+      throw new Error('画像データが空です。画像を選び直してください。');
+    }
+    if (!/^image\/(jpeg|png|gif|webp|heic|heif)$/i.test(fileData.mimeType || '')) {
+      throw new Error('JPEG、PNG、GIF、WebP、HEIC形式の画像を選択してください。');
+    }
+    if (Math.ceil(fileData.bytes.length * 3 / 4) > 10 * 1024 * 1024) {
+      throw new Error('画像は10MB以下にしてください。');
+    }
+
+    const safeName = String(fileData.filename || 'inspection-photo')
+      .replace(/[^a-zA-Z0-9._-]/g, '_');
+    const blob = Utilities.newBlob(
+      Utilities.base64Decode(fileData.bytes),
+      fileData.mimeType,
+      safeName
+    );
+    const file = DriveApp.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    return {
+      success: true,
+      fileId: file.getId(),
+      fileUrl: 'https://drive.google.com/uc?export=view&id=' + file.getId()
+    };
+  } catch (e) {
+    return { success: false, error: e.message || String(e) };
+  }
+}
+
+// 保存済み案件に登録された写真だけを、プレビュー用データとして返す
+function getReportPhotoPreview(reportId, photoUrl) {
+  try {
+    const report = getReportDetail(reportId);
+    if (!report) throw new Error('対象の報告書が見つかりません。');
+
+    const savedUrls = [
+      ...Object.values(report.photos || {}),
+      ...(report.pcsData || []).map(pcs => pcs.photo || ''),
+      ...(report.panelFarPhotos || [])
+    ];
+    if (!savedUrls.includes(photoUrl)) throw new Error('この報告書に登録されていない写真です。');
+
+    const match = String(photoUrl).match(/(?:[?&]id=|\/d\/)([A-Za-z0-9_-]+)/);
+    if (!match) throw new Error('写真URLの形式が正しくありません。');
+
+    const blob = DriveApp.getFileById(match[1]).getBlob();
+    const bytes = blob.getBytes();
+    if (bytes.length > 10 * 1024 * 1024) {
+      throw new Error('画像が大きいため一覧内に表示できません。画像をクリックしてDriveで開いてください。');
+    }
+
+    return {
+      success: true,
+      mimeType: blob.getContentType(),
+      base64: Utilities.base64Encode(bytes)
+    };
+  } catch (e) {
+    return { success: false, error: e.message || String(e) };
+  }
+}
+
 // 2. データの保存処理 (下書き / 確定)
 function saveReportData(formData) {
   try {
