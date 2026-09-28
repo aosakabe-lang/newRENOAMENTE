@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- グラフ描画用ライブラリ (Chart.js) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { background-color: #f0f2f5; font-family: sans-serif; padding-bottom: 100px; }
+    .header-nav { background: #1a237e; color: white; padding: 12px 20px; }
+    .card-custom { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; border-top: 4px solid #1a237e; }
+    .card-header-custom { background-color: transparent; border-bottom: 1px solid #eee; padding: 15px 20px; font-weight: bold; font-size: 1.1rem; color: #1a237e; }
+    .card-body { padding: 20px; }
+    .pcs-block { border: 1px solid #e0e0e0; padding: 15px; border-radius: 6px; margin-bottom: 15px; background-color: #fafafa; position: relative; }
+    .remove-pcs-btn { position: absolute; top: 10px; right: 10px; color: red; cursor: pointer; font-size: 0.9rem; font-weight: bold; }
+    .system-row { background: #fff; padding: 10px; border: 1px solid #eee; margin-bottom: 5px; border-radius: 4px; }
+    .photo-box { border: 1px dashed #ccc; padding: 15px; text-align: center; border-radius: 6px; background: #fff; }
+    .img-thumb { max-width: 100%; max-height: 120px; margin-top: 8px; border-radius: 4px; display: none; }
+    .preview-paper { background: white; padding: 30px; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .preview-table th, .preview-table td { font-size: 0.85rem; padding: 6px; text-align: center; }
+    .chart-container { position: relative; height: 220px; width: 100%; background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 10px; }
+  </style>
+</head>
+<body>
+
+  <!-- ヘッダーナビゲーション -->
+  <div class="header-nav d-flex justify-content-between align-items-center mb-4 shadow">
+    <div class="h5 mb-0 fw-bold">⚙️ リノアメンテナンスツール</div>
+    <div class="btn-group">
+      <button class="btn btn-outline-light btn-sm active" id="nav-input" onclick="switchView('input')">📝 点検データ入力</button>
+      <button class="btn btn-outline-light btn-sm" id="nav-preview" onclick="switchView('preview')">👁️ 報告書プレビュー</button>
+      <button class="btn btn-outline-light btn-sm" id="nav-history" onclick="switchView('history')">📁 履歴・下書き一覧</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <input type="hidden" id="reportId" value="">
+
+    <!-- ========================================== -->
+    <!-- 画面1: 点検データ入力画面                  -->
+    <!-- ========================================== -->
+    <div id="view-input">
+      <!-- 1. 基本情報・現場区分 -->
+      <div class="card-custom">
+        <div class="card-header-custom">👤 1. 基本情報・現場区分</div>
+        <div class="card-body">
+          <div class="row mb-3">
+            <div class="col-md-4">
+              <label class="form-label">電圧区分 *</label>
+              <select id="voltageType" class="form-select" onchange="toggleHighVoltageFields()">
+                <option value="低圧">低圧 (一般受電)</option>
+                <option value="高圧">高圧</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">施主様名 *</label>
+              <input type="text" id="clientName" class="form-control" placeholder="例: 株式会社 細野総合企画">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">メールアドレス (任意)</label>
+              <input type="email" id="email" class="form-control" placeholder="入力なしも可能">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">設置住所 *</label>
+            <input type="text" id="address" class="form-control" placeholder="群馬県桐生市...">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">作業担当者名 (複数選択可) *</label>
+            <div class="d-flex align-items-center flex-wrap border p-2 rounded bg-light">
+              <div class="me-3"><input type="checkbox" name="staff" value="中村 祐輔" id="s1"> <label for="s1">中村 祐輔</label></div>
+              <div class="me-3"><input type="checkbox" name="staff" value="速水 蓮" id="s2"> <label for="s2">速水 蓮</label></div>
+              <div class="me-3"><input type="checkbox" name="staff" value="市川 喜徳" id="s3"> <label for="s3">市川 喜徳</label></div>
+              <div class="ms-auto d-flex align-items-center">
+                <span class="me-2 text-muted small">その他:</span>
+                <input type="text" id="staffOther" class="form-control form-control-sm" style="width: 150px;">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. 発電所情報 & 気象条件 -->
+      <div class="card-custom">
+        <div class="card-header-custom">🌤 2. 発電所情報 & 気象条件</div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-4"><label class="form-label">発電所名</label><input type="text" id="plantName" class="form-control"></div>
+            <div class="col-md-3"><label class="form-label">天気</label><input type="text" id="weather" class="form-control"></div>
+            <div class="col-md-2"><label class="form-label">外気温度 (℃)</label><input type="number" id="outTemp" class="form-control"></div>
+            
+            <div class="col-md-3 high-volt-only" style="display:none;">
+              <label class="form-label text-primary">室温 (℃)</label><input type="number" id="roomTemp" class="form-control border-primary">
+            </div>
+          </div>
+          <div class="row mt-3 high-volt-only" style="display:none;">
+            <div class="col-md-6"><label class="form-label text-primary">電気主任技術者</label><input type="text" id="chiefEng" class="form-control border-primary"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. 目視点検 -->
+      <div class="card-custom">
+        <div class="card-header-custom">🔍 3. 目視点検</div>
+        <div class="card-body">
+          <h6 class="fw-bold">目視点検（異常があればチェックを外す）</h6>
+          <div class="row mb-3">
+            <div class="col-md-4"><input type="checkbox" id="chkPanel" checked> 太陽光パネル(キズ・歪み・破損なし)</div>
+            <div class="col-md-4"><input type="checkbox" id="chkMount" checked> 架台(変形・破損なし)</div>
+            <div class="col-md-4"><input type="checkbox" id="chkMetal" checked> 金具類(はずれなし)</div>
+            <div class="col-md-4 mt-2"><input type="checkbox" id="chkBoard" checked> 交流集合盤(変形・破損なし)</div>
+            <div class="col-md-4 mt-2"><input type="checkbox" id="chkEnv" checked> 周辺環境(雑草・不法投棄なし)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. PCS点検測定データ & I-Vカーブグラフ (動的追加) -->
+      <div class="card-custom">
+        <div class="card-header-custom d-flex justify-content-between align-items-center">
+          <span>🔌 4. PCS (パワコン) 点検測定データ & I-Vカーブ</span>
+          <button type="button" class="btn btn-success btn-sm" onclick="addPcsBlock()">＋ PCS追加</button>
+        </div>
+        <div class="card-body" id="pcsContainer"></div>
+      </div>
+
+      <!-- 5. 総合所見・メモ -->
+      <div class="card-custom">
+        <div class="card-header-custom">📝 5. 全体総合所見・メモ</div>
+        <div class="card-body">
+          <textarea id="ivCurveMemo" class="form-control" rows="3" placeholder="全体を通した特記事項・所見メモを入力してください（例: 本測定において特筆すべき異常は見受けられませんでした。一部西側の森林からの影影響あり。）"></textarea>
+        </div>
+      </div>
+
+      <!-- 6. 現場点検写真アップロード -->
+      <div class="card-custom">
+        <div class="card-header-custom">📷 6. 現場点検写真アップロード</div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <div class="photo-box">
+                <h6>① 交流集電盤 (全体)</h6>
+                <input type="file" accept="image/*" class="form-control form-control-sm" onchange="handlePhotoUpload(this, 'photo_board1')">
+                <input type="hidden" id="photo_board1_url" value="">
+                <img id="photo_board1_img" class="img-thumb">
+                <div id="photo_board1_status" class="small mt-1 text-muted"></div>
+              </div>
+            </div>
+            <div class="col-md-4 mb-3">
+              <div class="photo-box">
+                <h6>② 交流集電盤 (端子部)</h6>
+                <input type="file" accept="image/*" class="form-control form-control-sm" onchange="handlePhotoUpload(this, 'photo_board2')">
+                <input type="hidden" id="photo_board2_url" value="">
+                <img id="photo_board2_img" class="img-thumb">
+                <div id="photo_board2_status" class="small mt-1 text-muted"></div>
+              </div>
+            </div>
+            <div class="col-md-4 mb-3">
+              <div class="photo-box">
+                <h6>③ アレイ脚部 (ねじ等)</h6>
+                <input type="file" accept="image/*" class="form-control form-control-sm" onchange="handlePhotoUpload(this, 'photo_leg')">
+                <input type="hidden" id="photo_leg_url" value="">
+                <img id="photo_leg_img" class="img-thumb">
+                <div id="photo_leg_status" class="small mt-1 text-muted"></div>
+              </div>
+            </div>
+            <div class="col-md-4 mb-3">
+              <div class="photo-box">
+                <h6>④ パネル裏面 (配線等)</h6>
+                <input type="file" accept="image/*" class="form-control form-control-sm" onchange="handlePhotoUpload(this, 'photo_back')">
+                <input type="hidden" id="photo_back_url" value="">
+                <img id="photo_back_img" class="img-thumb">
+                <div id="photo_back_status" class="small mt-1 text-muted"></div>
+              </div>
+            </div>
+            <div class="col-md-4 mb-3">
+              <div class="photo-box">
+                <h6>⑤ パネル押さえ金具</h6>
+                <input type="file" accept="image/*" class="form-control form-control-sm" onchange="handlePhotoUpload(this, 'photo_metal')">
+                <input type="hidden" id="photo_metal_url" value="">
+                <img id="photo_metal_img" class="img-thumb">
+                <div id="photo_metal_status" class="small mt-1 text-muted"></div>
+              </div>
+            </div>
+            <div class="col-md-4 mb-3">
+              <div class="photo-box">
+                <h6>⑥ 異常箇所・その他</h6>
+                <input type="file" accept="image/*" class="form-control form-control-sm" onchange="handlePhotoUpload(this, 'photo_other')">
+                <input type="hidden" id="photo_other_url" value="">
+                <img id="photo_other_img" class="img-thumb">
+                <div id="photo_other_status" class="small mt-1 text-muted"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 画面2: 報告書プレビュー画面               -->
+    <!-- ========================================== -->
+    <div id="view-preview" style="display:none;">
+      <div class="alert alert-info d-flex justify-content-between align-items-center">
+        <span>📄 **印刷・確定用 報告書プレビュー**</span>
+        <button class="btn btn-sm btn-outline-primary" onclick="generatePreview()">🔄 最新データに更新</button>
+      </div>
+      
+      <div class="preview-paper">
+        <div class="text-center mb-4">
+          <h3 class="fw-bold">太陽光発電設備 年次点検報告書</h3>
+          <p class="text-muted small">株式会社ＪＩＭリノア 施工部システム保全課</p>
+        </div>
+
+        <table class="table table-bordered preview-table mb-4">
+          <tbody>
+            <tr>
+              <th class="bg-light" style="width: 15%;">施主様名</th>
+              <td id="prev-clientName" style="width: 35%;"></td>
+              <th class="bg-light" style="width: 15%;">点検区分</th>
+              <td id="prev-voltageType" style="width: 35%;"></td>
+            </tr>
+            <tr>
+              <th class="bg-light">発電所名</th>
+              <td id="prev-plantName"></td>
+              <th class="bg-light">点検担当者</th>
+              <td id="prev-staff"></td>
+            </tr>
+            <tr>
+              <th class="bg-light">設置住所</th>
+              <td id="prev-address"></td>
+              <th class="bg-light">気象条件</th>
+              <td id="prev-weather"></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h6 class="fw-bold text-navy border-bottom pb-1 mb-2">【PCS点検結果 一覧】</h6>
+        <div class="table-responsive mb-4">
+          <table class="table table-bordered preview-table">
+            <thead class="bg-light">
+              <tr>
+                <th>PCS No</th>
+                <th>型式</th>
+                <th>製造番号</th>
+                <th>瞬間(kW)</th>
+                <th>積算(kWh)</th>
+                <th>抑制(分)</th>
+                <th>増し締め</th>
+                <th>絶縁抵抗</th>
+                <th>I-Vカーブ所見</th>
+              </tr>
+            </thead>
+            <tbody id="prev-pcsTableBody"></tbody>
+          </table>
+        </div>
+
+        <h6 class="fw-bold text-navy border-bottom pb-1 mt-4 mb-2">【総合所見・特記事項】</h6>
+        <div class="p-3 bg-light border rounded text-dark small" id="prev-ivCurveMemo" style="min-height: 60px;"></div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 画面3: 履歴・下書き一覧画面               -->
+    <!-- ========================================== -->
+    <div id="view-history" style="display:none;">
+      <div class="card-custom">
+        <div class="card-header-custom d-flex justify-content-between align-items-center">
+          <span>📁 保存済み・下書きデータ一覧</span>
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadHistoryList()">🔄 一覧更新</button>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>状態</th>
+                  <th>最終更新日時</th>
+                  <th>発電所名</th>
+                  <th>施主様名</th>
+                  <th>区分</th>
+                  <th class="text-center">操作</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody">
+                <tr><td colspan="6" class="text-center text-muted">データを読み込み中...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- フッター固定ボタン -->
+  <div class="fixed-bottom bg-dark p-3 text-center shadow-lg" style="z-index: 1000;">
+    <button type="button" class="btn btn-light me-3 px-4" onclick="executeSave('下書き')">💾 下書き保存</button>
+    <button type="button" class="btn btn-primary px-5" onclick="executeSave('確定')">📄 報告書データを確定・保存</button>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let pcsCount = 0;
+    const chartInstances = {}; // 各PCSのグラフオブジェクト管理用
+
+    function switchView(viewName) {
+      document.getElementById('view-input').style.display = viewName === 'input' ? 'block' : 'none';
+      document.getElementById('view-preview').style.display = viewName === 'preview' ? 'block' : 'none';
+      document.getElementById('view-history').style.display = viewName === 'history' ? 'block' : 'none';
+
+      document.getElementById('nav-input').classList.toggle('active', viewName === 'input');
+      document.getElementById('nav-preview').classList.toggle('active', viewName === 'preview');
+      document.getElementById('nav-history').classList.toggle('active', viewName === 'history');
+
+      if (viewName === 'preview') generatePreview();
+      if (viewName === 'history') loadHistoryList();
+    }
+
+    function toggleHighVoltageFields() {
+      const isHigh = document.getElementById('voltageType').value === '高圧';
+      document.querySelectorAll('.high-volt-only').forEach(el => el.style.display = isHigh ? 'block' : 'none');
+    }
+
+    // 写真アップロード処理
+    function handlePhotoUpload(input, key) {
+      if (!input.files || !input.files[0]) return;
+      const file = input.files[0];
+      const statusDiv = document.getElementById(key + '_status');
+      const imgThumb = document.getElementById(key + '_img');
+      const hiddenUrl = document.getElementById(key + '_url');
+
+      statusDiv.innerHTML = "⏳ アップロード中...";
+      statusDiv.className = "small mt-1 text-primary";
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        if(imgThumb) {
+          imgThumb.src = e.target.result;
+          imgThumb.style.display = 'inline-block';
+        }
+        const base64Data = e.target.result.split(',')[1];
+        const fileData = {
+          filename: key + "_" + new Date().getTime() + ".jpg",
+          mimeType: file.type,
+          bytes: base64Data
+        };
+
+        google.script.run
+          .withSuccessHandler(function(res) {
+            if(res.success) {
+              statusDiv.innerHTML = "✅ 保存完了";
+              statusDiv.className = "small mt-1 text-success fw-bold";
+              if(hiddenUrl) hiddenUrl.value = res.fileUrl;
+            }
+          })
+          .withFailureHandler(function(err) {
+            statusDiv.innerHTML = "❌ エラー: " + err.message;
+            statusDiv.className = "small mt-1 text-danger";
+          })
+          .uploadImageToDrive(fileData);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // ★ I-Vカーブグラフ自動描画ロジック ★
+    function renderIvCurveChart(id) {
+      const voc = parseFloat(document.getElementById(`sys1_openv_${id}`)?.value) || 330; // 開放電圧
+      const vmp = parseFloat(document.getElementById(`sys1_opv_${id}`)?.value) || 265;  // 動作電圧
+      const imp = parseFloat(document.getElementById(`sys1_opa_${id}`)?.value) || 7.5;  // 動作電流
+
+      const canvas = document.getElementById(`chart_${id}`);
+      if (!canvas) return;
+
+      // グラフ用データ生成
+      const labels = [];
+      const idealData = [];  // 理想カーブ
+      const actualData = []; // 実測カーブ
+
+      for (let v = 0; v <= voc + 10; v += 10) {
+        labels.push(v + "V");
+        // 簡易I-V曲線数式モデル
+        let idealI = imp * (1 - Math.pow(v / (voc || 1), 6));
+        if (idealI < 0) idealI = 0;
+        idealData.push(idealI);
+
+        // 動作電圧周辺でのカーブ描画
+        let actualI = idealI;
+        if (v > vmp && v < voc) {
+          actualI = idealI * 0.95; // わずかな減衰
+        }
+        actualData.push(actualI);
+      }
+
+      // 既存グラフの破棄＆新規作成
+      if (chartInstances[id]) chartInstances[id].destroy();
+
+      const ctx = canvas.getContext('2d');
+      chartInstances[id] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: '実測 I-Vカーブ',
+              data: actualData,
+              borderColor: '#1a237e',
+              backgroundColor: 'rgba(26, 35, 126, 0.1)',
+              borderWidth: 2,
+              fill: true,
+              tension: 0.3
+            },
+            {
+              label: '理論値 (参考)',
+              data: idealData,
+              borderColor: '#9e9e9e',
+              borderDash: [5, 5],
+              borderWidth: 1.5,
+              fill: false
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { boxWidth: 12 } } },
+          scales: {
+            x: { title: { display: true, text: '電圧 (V)', font: { size: 10 } } },
+            y: { title: { display: true, text: '電流 (A)', font: { size: 10 } }, min: 0 }
+          }
+        }
+      });
+    }
+
+    // PCSブロック追加 (グラフ描画枠とコメント欄付き)
+    function addPcsBlock(data = null) {
+      const container = document.getElementById('pcsContainer');
+      if (!container) return;
+
+      pcsCount++;
+      const currentId = pcsCount;
+      const pcsHtml = `
+        <div class="pcs-block" id="pcsBlock_${currentId}" data-pcsid="${currentId}">
+          <span class="remove-pcs-btn" onclick="removePcsBlock(${currentId})">✖ 削除</span>
+          <h6 class="fw-bold text-success mb-3">PCS Unit ${currentId}</h6>
+          
+          <div class="row mb-2">
+            <div class="col-md-3"><label class="small text-muted">型式</label><input type="text" class="form-control form-control-sm pcs-model" value="${data ? data.model || '' : ''}"></div>
+            <div class="col-md-3"><label class="small text-muted">製造番号</label><input type="text" class="form-control form-control-sm pcs-serial" value="${data ? data.serial || '' : ''}"></div>
+            <div class="col-md-2"><label class="small text-muted">瞬間(kW)</label><input type="number" class="form-control form-control-sm pcs-kw" value="${data ? data.kw || '' : ''}"></div>
+            <div class="col-md-2"><label class="small text-muted">積算(kWh)</label><input type="number" class="form-control form-control-sm pcs-kwh" value="${data ? data.kwh || '' : ''}"></div>
+            <div class="col-md-2"><label class="small text-muted">抑制時間(分)</label><input type="number" class="form-control form-control-sm pcs-limit" value="${data ? data.limit || '' : ''}"></div>
+          </div>
+
+          <div class="row mb-3">
+            <div class="col-md-3">
+              <label class="small text-muted">端子増し締め</label>
+              <select class="form-select form-select-sm pcs-tighten"><option ${data && data.tighten === '済' ? 'selected' : ''}>済</option><option ${data && data.tighten === '未' ? 'selected' : ''}>未</option></select>
+            </div>
+            <div class="col-md-3">
+              <label class="small text-muted">絶縁抵抗(MΩ)</label>
+              <select class="form-select form-select-sm pcs-insulation"><option value="100" ${data && data.insulation === '100' ? 'selected' : ''}>100 (正常)</option><option value="0" ${data && data.insulation === '0' ? 'selected' : ''}>0 (不良)</option></select>
+            </div>
+          </div>
+
+          <!-- 系統別数値入力 -->
+          <div class="system-row row g-1">
+             <div class="col-2 col-md-1 fw-bold small pt-2">1系統</div>
+             <div class="col"><input type="number" id="sys1_openv_${currentId}" class="form-control form-control-sm sys1-openv" placeholder="開放電圧(V)" oninput="renderIvCurveChart(${currentId})" value="${data && data.sys1 ? data.sys1.openv || '' : ''}"></div>
+             <div class="col high-volt-only" style="display:none;"><input type="number" id="sys1_opv_${currentId}" class="form-control form-control-sm sys1-opv border-primary" placeholder="動作電圧(V)" oninput="renderIvCurveChart(${currentId})" value="${data && data.sys1 ? data.sys1.opv || '' : ''}"></div>
+             <div class="col high-volt-only" style="display:none;"><input type="number" id="sys1_opa_${currentId}" class="form-control form-control-sm sys1-opa border-primary" placeholder="動作電流(A)" oninput="renderIvCurveChart(${currentId})" value="${data && data.sys1 ? data.sys1.opa || '' : ''}"></div>
+             <div class="col"><input type="number" class="form-control form-control-sm sys1-uov" placeholder="U-O間(V)" value="${data && data.sys1 ? data.sys1.uov || '' : ''}"></div>
+          </div>
+
+          <!-- I-Vカーブ自動生成エリア & 個別所見コメント欄 -->
+          <div class="row mt-3">
+            <div class="col-md-7">
+              <label class="small fw-bold text-navy">📈 自動生成 I-Vカーブグラフ (PCS ${currentId})</label>
+              <div class="chart-container">
+                <canvas id="chart_${currentId}"></canvas>
+              </div>
+            </div>
+            <div class="col-md-5">
+              <label class="small fw-bold text-navy">💬 PCS ${currentId} I-Vカーブ所見・メモ</label>
+              <textarea class="form-control form-control-sm pcs-iv-comment" rows="8" placeholder="例: 異常無し。電流値に不揃いがありますが、測定中の日射量変化によるものです。一部西側樹木の影あり。">${data ? data.ivComment || '' : ''}</textarea>
+            </div>
+          </div>
+        </div>
+      `;
+      container.insertAdjacentHTML('beforeend', pcsHtml);
+      toggleHighVoltageFields();
+      
+      // グラフ初期描画
+      setTimeout(() => renderIvCurveChart(currentId), 200);
+    }
+
+    function removePcsBlock(id) {
+      if(confirm('このPCSデータを削除しますか？')) {
+        const target = document.getElementById('pcsBlock_' + id);
+        if(target) {
+          target.remove();
+          if(chartInstances[id]) delete chartInstances[id];
+        }
+      }
+    }
+
+    // 保存処理
+    function executeSave(statusStr) {
+      const btn = event.target;
+      const originalText = btn.innerText;
+      btn.innerText = "⏳ 保存中...";
+      btn.disabled = true;
+
+      const staffArr = [];
+      document.querySelectorAll('input[name="staff"]:checked').forEach(cb => staffArr.push(cb.value));
+
+      const pcsDataArray = [];
+      document.querySelectorAll('.pcs-block').forEach(block => {
+        const id = block.getAttribute('data-pcsid');
+        pcsDataArray.push({
+          pcsId: id,
+          model: block.querySelector('.pcs-model').value,
+          serial: block.querySelector('.pcs-serial').value,
+          kw: block.querySelector('.pcs-kw').value,
+          kwh: block.querySelector('.pcs-kwh').value,
+          limit: block.querySelector('.pcs-limit').value,
+          tighten: block.querySelector('.pcs-tighten').value,
+          insulation: block.querySelector('.pcs-insulation').value,
+          ivComment: block.querySelector('.pcs-iv-comment').value,
+          sys1: {
+            openv: block.querySelector('.sys1-openv').value,
+            opv: block.querySelector('.sys1-opv')?.value || '',
+            opa: block.querySelector('.sys1-opa')?.value || '',
+            uov: block.querySelector('.sys1-uov').value
+          }
+        });
+      });
+
+      const photosData = {
+        board1: document.getElementById('photo_board1_url').value,
+        board2: document.getElementById('photo_board2_url').value,
+        leg: document.getElementById('photo_leg_url').value,
+        back: document.getElementById('photo_back_url').value,
+        metal: document.getElementById('photo_metal_url').value,
+        other: document.getElementById('photo_other_url').value
+      };
+
+      const formData = {
+        reportId: document.getElementById('reportId').value,
+        status: statusStr,
+        voltageType: document.getElementById('voltageType').value,
+        clientName: document.getElementById('clientName').value,
+        email: document.getElementById('email').value,
+        address: document.getElementById('address').value,
+        plantName: document.getElementById('plantName').value,
+        weather: document.getElementById('weather').value,
+        outTemp: document.getElementById('outTemp').value,
+        roomTemp: document.getElementById('roomTemp').value,
+        chiefEng: document.getElementById('chiefEng').value,
+        ivCurveMemo: document.getElementById('ivCurveMemo').value,
+        staff: staffArr,
+        staffOther: document.getElementById('staffOther').value,
+        pcsData: pcsDataArray,
+        photos: photosData
+      };
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          btn.innerText = originalText;
+          btn.disabled = false;
+          if(res.success) {
+            document.getElementById('reportId').value = res.reportId;
+            alert(statusStr + " が完了しました！");
+          } else {
+            alert("保存エラー: " + res.error);
+          }
+        })
+        .saveReportData(formData);
+    }
+
+    // プレビュー生成
+    function generatePreview() {
+      document.getElementById('prev-clientName').innerText = document.getElementById('clientName').value || '-';
+      document.getElementById('prev-voltageType').innerText = document.getElementById('voltageType').value || '-';
+      document.getElementById('prev-plantName').innerText = document.getElementById('plantName').value || '-';
+      document.getElementById('prev-address').innerText = document.getElementById('address').value || '-';
+      document.getElementById('prev-weather').innerText = (document.getElementById('weather').value || '-') + " / " + (document.getElementById('outTemp').value || '-') + "℃";
+
+      const staffArr = [];
+      document.querySelectorAll('input[name="staff"]:checked').forEach(cb => staffArr.push(cb.value));
+      document.getElementById('prev-staff').innerText = staffArr.join(', ') || '-';
+
+      let pcsHtml = '';
+      document.querySelectorAll('.pcs-block').forEach((block, idx) => {
+        pcsHtml += `<tr>
+          <td>PCS ${idx + 1}</td>
+          <td>${block.querySelector('.pcs-model').value || '-'}</td>
+          <td>${block.querySelector('.pcs-serial').value || '-'}</td>
+          <td>${block.querySelector('.pcs-kw').value || '-'}</td>
+          <td>${block.querySelector('.pcs-kwh').value || '-'}</td>
+          <td>${block.querySelector('.pcs-limit').value || '-'}</td>
+          <td>${block.querySelector('.pcs-tighten').value}</td>
+          <td class="${block.querySelector('.pcs-insulation').value === '0' ? 'text-danger fw-bold' : ''}">${block.querySelector('.pcs-insulation').value} MΩ</td>
+          <td class="text-start">${block.querySelector('.pcs-iv-comment').value || '異常なし'}</td>
+        </tr>`;
+      });
+      document.getElementById('prev-pcsTableBody').innerHTML = pcsHtml || '<tr><td colspan="9">データがありません</td></tr>';
+      document.getElementById('prev-ivCurveMemo').innerText = document.getElementById('ivCurveMemo').value || '特記事項なし';
+    }
+
+    function loadHistoryList() {
+      const tbody = document.getElementById('historyTableBody');
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">データを読み込み中...</td></tr>';
+
+      google.script.run
+        .withSuccessHandler(function(list) {
+          if (!list || list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">保存されたデータはありません</td></tr>';
+            return;
+          }
+          let html = '';
+          list.forEach(item => {
+            const badgeClass = item.status === '確定' ? 'bg-primary' : 'bg-warning text-dark';
+            html += `<tr>
+              <td><span class="badge ${badgeClass}">${item.status}</span></td>
+              <td>${item.updatedAt}</td>
+              <td class="fw-bold">${item.plantName || '(未入力)'}</td>
+              <td>${item.clientName || '(未入力)'}</td>
+              <td>${item.voltageType}</td>
+              <td class="text-center">
+                <button class="btn btn-sm btn-outline-primary" onclick="loadReportDetail('${item.reportId}')">✏️ 開いて再編集</button>
+              </td>
+            </tr>`;
+          });
+          tbody.innerHTML = html;
+        })
+        .getReportList();
+    }
+
+    // 指定IDデータの読み込み復元
+    function loadReportDetail(reportId) {
+      google.script.run
+        .withSuccessHandler(function(data) {
+          if (!data) { alert("データの読み込みに失敗しました"); return; }
+          
+          document.getElementById('reportId').value = data.reportId || '';
+          document.getElementById('voltageType').value = data.voltageType || '低圧';
+          document.getElementById('clientName').value = data.clientName || '';
+          document.getElementById('email').value = data.email || '';
+          document.getElementById('address').value = data.address || '';
+          document.getElementById('plantName').value = data.plantName || '';
+          document.getElementById('weather').value = data.weather || '';
+          document.getElementById('outTemp').value = data.outTemp || '';
+          document.getElementById('roomTemp').value = data.roomTemp || '';
+          document.getElementById('chiefEng').value = data.chiefEng || '';
+          document.getElementById('ivCurveMemo').value = data.ivCurveMemo || '';
+
+          if(data.photos) {
+            ['board1', 'board2', 'leg', 'back', 'metal', 'other'].forEach(key => {
+              const url = data.photos[key];
+              if(url) {
+                document.getElementById('photo_' + key + '_url').value = url;
+                const img = document.getElementById('photo_' + key + '_img');
+                img.src = url;
+                img.style.display = 'inline-block';
+                document.getElementById('photo_' + key + '_status').innerHTML = "✅ 保存済み";
+              }
+            });
+          }
+
+          document.querySelectorAll('input[name="staff"]').forEach(cb => {
+            cb.checked = data.staff && data.staff.includes(cb.value);
+          });
+
+          document.getElementById('pcsContainer').innerHTML = '';
+          pcsCount = 0;
+          if (data.pcsData && data.pcsData.length > 0) {
+            data.pcsData.forEach(pcs => addPcsBlock(pcs));
+          } else {
+            addPcsBlock();
+          }
+
+          toggleHighVoltageFields();
+          switchView('input');
+          alert("データ（" + (data.plantName || '名称未設定') + "）を読み込みました。");
+        })
+        .getReportDetail(reportId);
+    }
+
+    window.onload = function() {
+      addPcsBlock();
+    };
+  </script>
+</body>
+</html>
